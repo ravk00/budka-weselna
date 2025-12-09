@@ -26,7 +26,7 @@ class VideoBooth(QMainWindow):
         if not os.path.exists(RECORDINGS_DIR):
             os.makedirs(RECORDINGS_DIR)
 
-        self.temp_file = os.path.join(RECORDINGS_DIR, "temp_rec") # bez rozszerzenia na razie
+        self.temp_file = os.path.join(RECORDINGS_DIR, "temp_rec") 
 
         # --- UI SETUP ---
         self.central_widget = QWidget()
@@ -110,19 +110,21 @@ class VideoBooth(QMainWindow):
 
         elif self.state == 'TIMEOUT_WARNING':
             if event.key() == Qt.Key.Key_A:
-                # Użytkownik wcisnął A - idziemy do podglądu nagranego materiału
                 self.stop_warning_logic()
                 self.go_to_review()
 
     def start_recording(self):
         self.state = 'RECORDING'
-        # Ważne: Wymuszamy rozszerzenie .webm lub .mkv dla stabilności zapisu
+        # Ważne: Wymuszamy rozszerzenie .webm dla stabilności
         self.recorder.setOutputLocation(QUrl.fromLocalFile(self.temp_file + ".webm"))
         self.recorder.record()
         
         self.rec_seconds = 0
         self.rec_timer.start(1000)
-        self.update_label_text()
+        
+        # --- POPRAWKA: Bezpośrednie ustawienie tekstu zamiast błędnej funkcji ---
+        self.info_label.setText(f"NAGRYWANIE: 00:00 (SPACJA aby zatrzymać)")
+        self.info_label.setStyleSheet("font-size: 36px; color: red; background-color: rgba(0,0,0,150); padding: 20px;")
 
     def stop_recording(self):
         self.recorder.stop()
@@ -141,7 +143,7 @@ class VideoBooth(QMainWindow):
 
     def trigger_timeout_warning(self):
         self.state = 'TIMEOUT_WARNING'
-        self.recorder.stop() # Zatrzymujemy nagrywanie, ale nie wchodzimy jeszcze w review
+        self.recorder.stop() 
         self.rec_timer.stop()
         self.warning_seconds = WARNING_TIME_SEC
         self.warning_timer.start(1000)
@@ -153,7 +155,7 @@ class VideoBooth(QMainWindow):
         
         if self.warning_seconds <= 0:
             self.warning_timer.stop()
-            self.reset_to_home() # Brak reakcji = reset
+            self.reset_to_home() 
 
     def update_warning_label(self):
         self.info_label.setText(f"Koniec czasu! Reset za {self.warning_seconds}s. Naciśnij 'A' aby zachować.")
@@ -168,20 +170,16 @@ class VideoBooth(QMainWindow):
         self.stack.setCurrentWidget(self.player_widget)
         self.camera.stop()
         
-        # Załaduj nagranie
-        # QtRecorder sam dodaje rozszerzenie, musimy znaleźć właściwy plik
         real_file = self.find_actual_recording_file()
         if real_file:
             self.player.setSource(QUrl.fromLocalFile(real_file))
             self.player.play()
-            # Pętla odtwarzania
             self.player.mediaStatusChanged.connect(self.loop_video)
         
         self.info_label.setText("Podgląd. ENTER: Akceptuj | ESC: Odrzuć")
+        self.info_label.setStyleSheet("font-size: 36px; color: white; background-color: rgba(0,0,0,150); padding: 20px;")
 
     def find_actual_recording_file(self):
-        # PyQt6 może dodać .webm, .mkv, .mp4 zależnie od backendu
-        # Szukamy pliku który zaczyna się od temp_rec
         for f in os.listdir(RECORDINGS_DIR):
             if f.startswith("temp_rec"):
                 return os.path.join(RECORDINGS_DIR, f)
@@ -196,16 +194,12 @@ class VideoBooth(QMainWindow):
         real_file = self.find_actual_recording_file()
         
         if real_file:
-            # Generowanie nazwy pliku MP4 z datą
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             output_file = os.path.join(RECORDINGS_DIR, f"video_{timestamp}.mp4")
             
             self.info_label.setText("Zapisywanie... Proszę czekać.")
-            QApplication.processEvents() # Odśwież UI
+            QApplication.processEvents() 
             
-            # --- KONWERSJA FFmpeg (WebM -> MP4) ---
-            # Uruchamiamy jako osobny proces, żeby nie blokować UI (można też w wątku, ale to prostsze)
-            # Parametry: -i (input) -c:v libx264 (video codec) -c:a aac (audio codec) -y (nadpisz)
             cmd = [
                 "ffmpeg", "-i", real_file,
                 "-c:v", "libx264", "-preset", "fast",
@@ -213,9 +207,6 @@ class VideoBooth(QMainWindow):
                 output_file, "-y"
             ]
             
-            # Uruchamiamy proces w tle. Jeśli chcesz czekać na wynik, użyj .wait() lub subprocess.run
-            # Tutaj uruchamiamy w tle, a stary plik usuwamy dopiero jak jesteśmy pewni (w produkcji)
-            # Dla uproszczenia: czekamy na konwersję (krótkie pliki to sekundy)
             try:
                 subprocess.run(cmd, check=True)
                 print(f"Zapisano: {output_file}")
@@ -229,7 +220,6 @@ class VideoBooth(QMainWindow):
         self.player.setSource(QUrl())
         self.state = 'HOME'
         
-        # Czyszczenie plików tymczasowych
         for f in os.listdir(RECORDINGS_DIR):
             if f.startswith("temp_rec"):
                 try:
